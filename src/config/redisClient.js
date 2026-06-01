@@ -2,7 +2,7 @@ import { createClient } from "redis";
 import config from "./config.js";
 import logger from "./logger.js";
 
-const isProduction = config.nodeEnv === "production";
+let isShuttingDown = false;
 
 const redisClient = createClient({
   url: config.redisURI,
@@ -12,51 +12,87 @@ const redisClient = createClient({
     keepAlive: 5000,
 
     reconnectStrategy: (retries) => {
+      if (isShuttingDown) {
+        return false;
+      }
+
       if (retries > 20) {
         logger.error("Redis max reconnection attempts reached");
         return false;
       }
 
-      return Math.min(retries * 200, 5000);
+      const delay = Math.min(retries * 200, 5000);
+
+      logger.warn(
+        `Redis reconnect attempt #${retries}. Retrying in ${delay}ms`
+      );
+
+      return delay;
     },
   },
 });
 
-redisClient.on("error", (err) => {
-  logger.error("Redis client error: ", err);
-});
+// ----------------------------
+// Event Listeners
+// ----------------------------
 
-redisClient.on("end", () => {
-  logger.warn("Redis connection ended");
-});
-
-redisClient.on("reconnecting", () => {
-  logger.warn("Redis reconnecting...");
+redisClient.on("connect", () => {
+  logger.info("✅ Redis connected");
 });
 
 redisClient.on("ready", () => {
-  logger.info("Redis ready");
+  logger.info("✅ Redis ready");
 });
 
-redisClient.on("connect", () => {
-  logger.info("Redis connected");
+redisClient.on("reconnecting", () => {
+  if (!isShuttingDown) {
+    logger.warn("🔄 Redis reconnecting...");
+  }
 });
 
-const shutdown = async () => {
+redisClient.on("end", () => {
+  logger.warn("⚠️ Redis connection closed");
+});
+
+redisClient.on("error", (err) => {
+  logger.error("❌ Redis Error:", err);
+});
+
+// ----------------------------
+// Connect Function
+// ----------------------------
+
+export const connectRedis = async () => {
   try {
-    await redisClient.quit();
-
-    logger.info("Redis disconnected gracefully");
-
-    process.exit(0);
-  } catch (err) {
-    logger.error("Redis shutdown failed: ", err);
-
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
+      logger.info("🚀 Redis connection established");
+    }
+  } catch (error) {
+    logger.error("Failed to connect Redis:", error);
     process.exit(1);
   }
 };
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+// ----------------------------
+// Graceful Shutdown Function
+// ----------------------------
+
+export const disconnectRedis = async () => {
+  try {
+    isShuttingDown = true;
+
+    if (redisClient.isOpen) {
+      await redisClient.quit();
+      logger.info("✅ Redis disconnected gracefully");
+    }
+  } catch (error) {
+    logger.error("❌ Redis shutdown failed:", error);
+  }
+};
 
 export default redisClient;
+
+
+
+

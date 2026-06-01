@@ -339,12 +339,9 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-// Routes
-// import authRoutes from './routes/auth.js';
-// import userRoutes from './routes/users.js';
-
-// app.use('/api/auth', authRoutes);
-// app.use('/api/users', userRoutes);
+app.get("/", (req, res) => {
+  res.send("ReelCore API is running")       // default API checking
+})
 
 app.use((_req, res) => {
   res.status(404).json({

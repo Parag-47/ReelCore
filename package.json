@@ -15,7 +15,7 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "nodemon --env-file=.env src/server.js",
+    "start": "nodemon --env-file=src/.env src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
