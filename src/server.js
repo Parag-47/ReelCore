@@ -1,4 +1,5 @@
 import http from "node:http";
+import mongoose from "mongoose";
 import app from "./app.js";
 import config from "./config/config.js";
 import connectDB from "./config/mongo.js";
@@ -6,57 +7,89 @@ import redisClient from "./config/redisClient.js";
 import logger from "./config/logger.js";
 
 process.on("uncaughtException", (err) => {
-  logger.error("UNCAUGHT EXCEPTION — shutting down \n Error: ", err);
+  logger.error("UNCAUGHT EXCEPTION — terminating immediately", { err });
   process.exit(1);
 });
 
+// ─── Server bootstrap ─────────────────────────────────────────────────────────
 const PORT = parseInt(config.port, 10) || 5000;
 const server = http.createServer(app);
 
 async function startServer() {
   try {
     await redisClient.connect();
+    logger.info("Redis connected");
+
     await connectDB();
-    server.listen(PORT, () => {
-      logger.info(
-        `Server running in ${process.env.NODE_ENV} mode on port ${PORT}`
-      );
+    logger.info("MongoDB connected");
+
+    await new Promise((resolve, reject) => {
+      server.listen(PORT, resolve);
+      server.once("error", reject);
     });
+
+    logger.info(`Server running in ${config.nodeEnv} mode on port ${PORT}`);
   } catch (err) {
-    console.log(JSON.stringify(err, null, 2));
-    logger.error(
-      "Server initialization failed — shutting down...\n Error: ",
-      err
-    );
+    logger.error("Server initialisation failed — terminating", { err });
     process.exit(1);
   }
 }
 
-startServer();
-
-// After server starts, catch unhandled promise rejections
 process.on("unhandledRejection", (reason) => {
-  logger.error("UNHANDLED REJECTION — shutting down \n Reason: ", reason);
-  shutdown("UNHANDLED_REJECTION");
+  logger.error("UNHANDLED REJECTION — initiating graceful shutdown", {
+    reason,
+  });
+  shutdown("UNHANDLED_REJECTION").catch(() => process.exit(1));
 });
 
-const shutdown = (signal) => {
-  logger.info(`${signal} received — graceful shutdown starting`);
+await startServer();
 
-  server.close(async () => {
-    const mongoose = await import("mongoose");
-    await mongoose.default.connection.close();
-    await redisClient.quit();
-    logger.info("MongoDB closed. Exiting.");
-    process.exit(0);
-  });
+let shutdownPromise = null;
 
-  // Force-kill if shutdown takes > 10s
-  setTimeout(() => {
-    logger.error("Graceful shutdown timed out — forcing exit");
-    process.exit(1);
-  }, 10_000).unref();
-};
+async function shutdown(signal) {
+  if (shutdownPromise) {
+    logger.warn(
+      `${signal} received while shutdown already in progress — waiting`
+    );
+    return shutdownPromise;
+  }
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+  shutdownPromise = (async () => {
+    logger.info(`${signal} received — graceful shutdown starting`);
+
+    const forceExit = setTimeout(() => {
+      logger.error("Graceful shutdown timed out — forcing exit");
+      process.exit(1);
+    }, 10_000).unref();
+
+    try {
+      await new Promise((resolve, reject) => {
+        server.close((err) => (err ? reject(err) : resolve()));
+      });
+      logger.info("HTTP server closed");
+
+      if (mongoose.connection.readyState !== 0) {
+        await mongoose.connection.close();
+        logger.info("MongoDB connection closed");
+      }
+
+      if (redisClient?.isOpen) {
+        await redisClient.quit();
+        logger.info("Redis connection closed");
+      }
+
+      clearTimeout(forceExit);
+      logger.info("Graceful shutdown complete — exiting");
+      process.exit(0);
+    } catch (err) {
+      clearTimeout(forceExit);
+      logger.error("Error during graceful shutdown", { err });
+      process.exit(1);
+    }
+  })();
+
+  return shutdownPromise;
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM").catch(() => process.exit(1)));
+process.on("SIGINT", () => shutdown("SIGINT").catch(() => process.exit(1)));
