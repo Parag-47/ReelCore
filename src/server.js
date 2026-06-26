@@ -11,17 +11,16 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
-// ─── Server bootstrap ─────────────────────────────────────────────────────────
 const PORT = parseInt(config.port, 10) || 5000;
 const server = http.createServer(app);
 
 async function startServer() {
   try {
     await redisClient.connect();
-    logger.info("Redis connected");
+    // logger.info("Redis connected");
 
     await connectDB();
-    logger.info("MongoDB connected");
+    // logger.info("MongoDB connected");
 
     await new Promise((resolve, reject) => {
       server.listen(PORT, resolve);

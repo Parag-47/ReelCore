@@ -1,9 +1,5 @@
 import logger from "../config/logger.js";
 
-// ─────────────────────────────────────────────────────────────
-// AppError — operational errors you create intentionally.
-// Usage: throw new AppError('Not found', 404)
-// ─────────────────────────────────────────────────────────────
 export class AppError extends Error {
   constructor(message, statusCode) {
     super(message);
@@ -13,7 +9,7 @@ export class AppError extends Error {
   }
 }
 
-// ── Mongoose / library error mappers ──────────────────────────
+// Mongoose library error mappers
 const handleCastError = (e) =>
   new AppError(`Invalid ${e.path}: ${e.value}`, 400);
 const handleDuplicateKey = (e) =>
@@ -31,7 +27,7 @@ const handleJWTExpired = () =>
   new AppError("Session expired — please log in again", 401);
 const handleCSRF = () => new AppError("Invalid CSRF token", 403);
 
-// ── Response serialisers ───────────────────────────────────────
+// Response serializers
 const sendDev = (err, res) =>
   res.status(err.statusCode).json({
     status: "error",
@@ -53,9 +49,6 @@ const sendProd = (err, res) => {
   });
 };
 
-// ─────────────────────────────────────────────────────────────
-// Global error handler — 4 params required by Express
-// ─────────────────────────────────────────────────────────────
 const errorHandler = (err, req, res, _next) => {
   console.log(err);
   err.statusCode = err.statusCode || 500;
