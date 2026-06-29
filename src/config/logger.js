@@ -1,7 +1,7 @@
 import { createLogger, format, transports } from "winston";
 import config from "./config.js";
 
-const { combine, timestamp, errors, json, colorize, printf } = format;
+const { combine, timestamp, errors, colorize, printf, json } = format;
 
 // Fields that are NEVER written to logs
 const REDACTED = new Set([
@@ -31,14 +31,41 @@ const redactSecrets = format((info) => {
   return redact(info);
 });
 
+// Makes Error objects readable inside JSON.stringify
+// Error properties (message, stack) are non-enumerable so {} without this
+function serializeError(key, value) {
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack,
+      ...(value.statusCode && { statusCode: value.statusCode }),
+      ...(value.errors?.length && { errors: value.errors }),
+      ...(value.code && { code: value.code }),
+    };
+  }
+  return value;
+}
+
 const devFormat = combine(
-  colorize(),
   timestamp({ format: "HH:mm:ss" }),
   errors({ stack: true }),
-  printf(
-    ({ level, message, timestamp, stack }) =>
-      `${timestamp} [${level}]: ${stack || message}`
-  )
+  printf((info) => {
+    const { level, message, timestamp, stack, ...meta } = info;
+
+    // Colorize only when stdout is a real TTY (terminal)
+    // Avoids ANSI escape codes appearing raw in Postman / log files
+    const lvl = process.stdout.isTTY
+      ? colorize().colorize(level, level.toUpperCase())
+      : level.toUpperCase();
+
+    // Serialize metadata if present (err, ip, path, etc.)
+    const metaStr = Object.keys(meta).length
+      ? "\n" + JSON.stringify(meta, serializeError, 2)
+      : "";
+
+    return `${timestamp} [${lvl}]: ${stack || message}${metaStr}`;
+  })
 );
 
 const prodFormat = combine(

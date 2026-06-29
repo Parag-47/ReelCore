@@ -2,17 +2,20 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import timeout from "connect-timeout";
-import rateLimit from "express-rate-limit";
-import slowDown from "express-slow-down";
 import hpp from "hpp";
 import session from "express-session";
 import { doubleCsrf } from "csrf-csrf";
 import morgan from "morgan";
-
 import config from "./config/config.js";
 import logger from "./config/logger.js";
 import redisStore from "./config/redisSessionStore.js";
-import errorHandler from "./middlewares/errorHandler.js";
+import {
+  globalLimiter,
+  speedLimiter,
+  authLimiter,
+} from "./middlewares/rateLimiter.middleware.js";
+import errorHandler from "./middlewares/errorHandler.middleware.js";
+import router from "./modules/routes/index.js";
 
 const app = express();
 
@@ -252,71 +255,29 @@ app.use(
   })
 );
 
-// CSRF
-const { doubleCsrfProtection, generateToken } = doubleCsrf({
-  getSecret: () => config.csrfSecret,
+// CSRF - Probably not needed.
+// const { doubleCsrfProtection, generateToken } = doubleCsrf({
+//   getSecret: () => config.csrfSecret,
 
-  cookieName: "__Host-csrf",
+//   cookieName: "__Host-csrf",
 
-  cookieOptions: {
-    secure: config.nodeEnv === "production",
-    sameSite: "lax",
-    httpOnly: true,
-    path: "/",
-  },
+//   cookieOptions: {
+//     secure: config.nodeEnv === "production",
+//     sameSite: "lax",
+//     httpOnly: true,
+//     path: "/",
+//   },
 
-  size: 64,
+//   size: 64,
 
-  getTokenFromRequest: (req) => req.headers["x-csrf-token"],
-});
+//   getTokenFromRequest: (req) => req.headers["x-csrf-token"],
+// });
 
-app.set("generateCsrfToken", generateToken);
-
-// RATE LIMITING
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 100,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-
-  handler(req, res) {
-    logger.warn(
-      { ip: req.ip, path: req.originalUrl },
-      "Global rate limit exceeded"
-    );
-
-    res.status(429).json({
-      status: "error",
-      message: "Too many requests. Try again later.",
-    });
-  },
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  skipSuccessfulRequests: true,
-
-  handler(req, res) {
-    logger.warn({ ip: req.ip }, "Auth brute-force protection triggered");
-
-    res.status(429).json({
-      status: "error",
-      message: "Too many login attempts.",
-    });
-  },
-});
-
-const speedLimiter = slowDown({
-  windowMs: 15 * 60 * 1000,
-  delayAfter: 50,
-  delayMs: () => 500,
-});
+// app.set("generateCsrfToken", generateToken);
 
 app.use("/api", globalLimiter, speedLimiter);
-app.use("/api/auth", authLimiter);
+app.use("/api/v1/auth", authLimiter);
+app.use("/api/v1", router);
 
 app.get("/health", (_req, res) => {
   res.status(200).json({
@@ -325,23 +286,23 @@ app.get("/health", (_req, res) => {
   });
 });
 
-app.get("/api/auth/csrf-token", (req, res) => {
-  const token = req.app.get("generateCsrfToken")(req);
+// app.get("/api/auth/csrf-token", (req, res) => {
+//   const token = req.app.get("generateCsrfToken")(req);
 
-  res.json({ csrfToken: token });
-});
+//   res.json({ csrfToken: token });
+// });
 
-app.use("/api", (req, res, next) => {
-  if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
-    return doubleCsrfProtection(req, res, next);
-  }
+// app.use("/api", (req, res, next) => {
+//   if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+//     return doubleCsrfProtection(req, res, next);
+//   }
 
-  next();
-});
+//   next();
+// });
 
 app.get("/", (req, res) => {
-  res.send("ReelCore API is running")       // default API checking
-})
+  res.send("ReelCore API is running"); // default API checking
+});
 
 app.use((_req, res) => {
   res.status(404).json({

@@ -10,10 +10,6 @@ const redisClient = createClient({
     keepAlive: 5000,
 
     reconnectStrategy: (retries) => {
-      if (isShuttingDown) {
-        return false;
-      }
-
       if (retries > 20) {
         logger.error("Redis max reconnection attempts reached");
         return false;
