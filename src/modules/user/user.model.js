@@ -1,115 +1,124 @@
 import { Schema, model } from "mongoose";
+import { v7 as uuidv7 } from "uuid";
 
 const userSchema = new Schema(
   {
-    id: {
+    publicId: {
       type: String,
       unique: true,
-      require: true,
+      immutable: true,
+      index: true,
+      default: () => uuidv7(),
     },
-    // Moving this to profile for now.
-    // firstName: {
-    //   type: String,
-    //   trim: true,
-    //   default: "Unknown",
-    // },
-    // lastName: {
-    //   type: String,
-    //   trim: true,
-    // },
     email: {
       type: String,
-      trim: true,
-      lowercase: true,
-      // required() {
-      //   return (
-      //     !this.oauth ||
-      //     !Object.values(this.oauth).some((provider) => provider.email)
-      //   );
-      // },
-      // unique() {
-      //   return !!this.email;
-      // },
-    },
-    userName: {
-      type: String,
-      trim: true,
-      lowercase: true,
-      unique: true,
       required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+      // intentionally NOT immutable — email updates are legitimate,
+      // just not exposed yet. enforce at service layer when the time comes.
     },
-    // phone: {
-    //   type: String,
-    //   trim: true,
-    // },
+    username: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+    },
     password: {
       type: String,
-      private: true,
-      required() {
-        return this.isNew && this.provider === "EMAIL" && !this.invitationToken;
-      },
-    },
-    isEmailVerified: {
-      type: Boolean,
-      default: false,
-    },
-    status: {
-      type: String,
-      enum: ["active", "inactive", "banned", "blocked"],
-      default: "inactive",
-    },
-    invitationToken: {
-      type: String,
       select: false,
+      // required() kept intentionally simple — the controller already knows
+      // which provider path it's on and guards this. a function-based required
+      // using this.authProviders.includes() is unreliable during User.create()
+      // because field ordering affects whether authProviders is set on `this`
+      // at validation time.
     },
-    lastLogin: {
-      type: Date,
-    },
-    // profile: {
-    //   type: mongoose.Schema.Types.ObjectId,
-    //   ref: "Profile",
-    // },
-    providers: {
+    authProviders: {
       type: [String],
-      enum: ["GOOGLE", "EMAIL"],
-      default: ["EMAIL"],
+      enum: ["local", "google"],
+      default: ["local"], // was: [local] — unquoted identifier, ReferenceError at import
     },
     oauth: {
       google: {
-        googleId: {
+        id: {
           type: String,
-        },
-        email: {
-          type: String,
-          trim: true,
-          lowercase: true,
+          unique: true,
+          sparse: true, // allows multiple null values (accounts with no Google)
+          select: false,
         },
       },
     },
-    // metadata: {
-    //   createdBy: {
-    //     type: mongoose.Schema.Types.ObjectId,
-    //     ref: "User",
-    //   },
-    //   updatedBy: {
-    //     type: mongoose.Schema.Types.ObjectId,
-    //     ref: "User",
-    //   },
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerifiedAt: {
+      type: Date,
+      select: false,
+    },
+    // role: {
+    //   type: String,
+    //   enum: ["user", "admin"],
+    //   default: "user",
     // },
+    status: {
+      type: String,
+      // dropped "deleted" — deletedAt below already handles soft-delete state.
+      // having two deletion signals (status="deleted" AND deletedAt) means
+      // they can drift out of sync. deletedAt alone is cleaner:
+      //   null  = not deleted
+      //   Date  = soft-deleted at that timestamp (useful for purge jobs)
+      enum: ["active", "suspended"],
+      default: "active",
+    },
+    // --- Brute-force protection (OWASP: account-based, not IP-based) ---
+    failedLoginAttempts: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
+    lockoutUntil: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+    lastFailedLoginAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+    // --- Session/token invalidation ---
+    // Used to invalidate sessions issued before a password change.
+    // Not for forced rotation — OWASP discourages that pattern.
+    passwordChangedAt: {
+      type: Date,
+      select: false,
+    },
+    // --- Audit fields ---
+    lastLoginAt: {
+      type: Date,
+    },
+    lastLoginIp: {
+      type: String,
+      select: false,
+    },
+    // --- Soft delete ---
+    // null = active; Date = deleted at that timestamp.
+    // purge job candidate: deletedAt < (now - 30d) → hard delete.
+    deletedAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-userSchema.index({
-  email: 1,
-  firstName: 1,
-  lastName: 1,
-  userName: 1,
-  status: 1,
-});
+userSchema.index({ status: 1 });
+// userSchema.index({ role: 1 });
 
-const User = model("User", userSchema);
-
-export default User;
+export default model("User", userSchema);
