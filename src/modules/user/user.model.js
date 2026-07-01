@@ -16,8 +16,6 @@ const userSchema = new Schema(
       unique: true,
       trim: true,
       lowercase: true,
-      // intentionally NOT immutable — email updates are legitimate,
-      // just not exposed yet. enforce at service layer when the time comes.
     },
     username: {
       type: String,
@@ -117,6 +115,34 @@ const userSchema = new Schema(
     timestamps: true,
   }
 );
+
+userSchema.set("toJSON", {
+  versionKey: false,
+  transform(doc, ret) {
+    // Expose publicId as the API identifier.
+    ret.id = ret.publicId;
+
+    // Remove internal fields.
+    delete ret._id;
+    delete ret.publicId;
+    delete ret.oauth;
+
+    // These are already select:false for queries, but create()/save()
+    // return the full document, so remove them here as a second safety net.
+    delete ret.password;
+    delete ret.emailVerifiedAt;
+    delete ret.failedLoginAttempts;
+    delete ret.lockoutUntil;
+    delete ret.lastFailedLoginAt;
+    delete ret.passwordChangedAt;
+    delete ret.lastLoginIp;
+    delete ret.deletedAt;
+
+    return ret;
+  },
+});
+
+userSchema.set("toObject", userSchema.get("toJSON"));
 
 userSchema.index({ status: 1 });
 // userSchema.index({ role: 1 });

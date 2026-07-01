@@ -1,0 +1,62 @@
+/**
+ * Strips internal and sensitive fields from a User document before sending
+ * it to the client.
+ *
+ * Why this helper exists:
+ * - `select: false` only affects documents loaded from database queries.
+ *   Documents returned by `User.create()` / `doc.save()` still contain every
+ *   field, including sensitive ones like `password`.
+ * - This function provides a second layer of protection so controllers can
+ *   safely serialize newly-created documents as well.
+ *
+ * Fields normally hidden by `select: false`:
+ * - password
+ * - oauth.google.id
+ * - emailVerifiedAt
+ * - failedLoginAttempts
+ * - lockoutUntil
+ * - lastFailedLoginAt
+ * - passwordChangedAt
+ * - lastLoginIp
+ * - deletedAt
+ *
+ * @param {import("mongoose").Document|Object} user
+ * @returns {Object}
+ */
+const sanitizeUser = (user) => {
+  // Convert Mongoose document into a plain object.
+  const obj = user.toObject ? user.toObject() : { ...user };
+
+  // Public API shape
+
+  // Expose publicId as `id` for the API.
+  obj.id = obj.publicId;
+
+  // Internal fields
+  delete obj._id;
+  delete obj.__v;
+  delete obj.publicId;
+
+  // Internal OAuth linkage.
+  delete obj.oauth;
+
+  // --------------------------------------------------
+  // Sensitive fields
+  // --------------------------------------------------
+
+  // These should already be absent on queried documents because of
+  // `select: false`, but they WILL exist immediately after
+  // `User.create()` / `doc.save()`.
+  delete obj.password;
+  delete obj.emailVerifiedAt;
+  delete obj.failedLoginAttempts;
+  delete obj.lockoutUntil;
+  delete obj.lastFailedLoginAt;
+  delete obj.passwordChangedAt;
+  delete obj.lastLoginIp;
+  delete obj.deletedAt;
+
+  return obj;
+};
+
+export default sanitizeUser;

@@ -13,12 +13,12 @@ import asyncHandler from "../../shared/utils/asyncHandler.js";
 import ApiError from "../../shared/utils/ApiError.js";
 import ApiResponse from "../../shared/utils/ApiResponse.js";
 import attempt from "../../shared/utils/attempt.js";
-import sanitizeUser from "../../shared/utils/sanitizeUser.js";
 // import { sendEmail } from "../../shared/utils/sendEmail.js"; // TODO: wire up once email system is built
 
 const PENDING_REGISTRATION_PREFIX = "pending-registration:";
 const PENDING_REGISTRATION_TTL_SECONDS = 15 * 60;
 
+// TODO: Check the edge case where use tries to register with same email twice the current behavior is that 2 tokens will be generated for the same user
 const register = asyncHandler(async (req, res) => {
   let { username, email, password } = req.body;
 
@@ -117,8 +117,8 @@ const verify = asyncHandler(async (req, res, next) => {
       status: "active",
     })
   );
-
-  if (error.code === 11000)
+  console.log(user);
+  if (error && error.code === 11000)
     throw new ApiError(409, "Username or email is already in use!");
 
   if (error || !user) throw new ApiError(500, "Failed to create user!", error);
@@ -131,7 +131,7 @@ const verify = asyncHandler(async (req, res, next) => {
     req.session.save((err) => {
       if (err) return next(new ApiError(500, "Session save failed"));
 
-      const userData = sanitizeUser(user);
+      const userData = user.toJSON();
 
       return res
         .status(201)

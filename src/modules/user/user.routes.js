@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { registerUser } from "./user.validation.js";
+import { registerUser, verifyUser } from "./user.validation.js";
+import { register, verify } from "./user.controller.js";
 import validate from "../../middlewares/validate.middleware.js";
 const userRouter = Router();
 
-userRouter.post("/create", validate(registerUser), (req, res) => {
-  res.send("test");
-});
+userRouter.post("/auth/register", validate(registerUser), register);
+userRouter.post("/auth/verify", validate(verifyUser), verify);
 
 export default userRouter;

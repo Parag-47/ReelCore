@@ -39,7 +39,7 @@ const registerUser = {
       .email({ tlds: { allow: false } })
       .external(checkFakeEmail)
       .required(),
-    userName: Joi.string().trim().min(3).max(50).alphanum().required(),
+    username: Joi.string().trim().min(3).max(50).alphanum().required(),
     password: Joi.string()
       .min(8)
       .max(128)
@@ -52,4 +52,10 @@ const registerUser = {
   }),
 };
 
-export { registerUser };
+const verifyUser = {
+  body: Joi.object({
+    token: Joi.string().trim().lowercase().required(),
+  }),
+};
+
+export { registerUser, verifyUser };

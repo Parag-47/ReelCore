@@ -276,7 +276,7 @@ app.use(
 // app.set("generateCsrfToken", generateToken);
 
 app.use("/api", globalLimiter, speedLimiter);
-app.use("/api/v1/auth", authLimiter);
+app.use("/api/v1/users/auth", authLimiter);
 app.use("/api/v1", router);
 
 app.get("/health", (_req, res) => {
