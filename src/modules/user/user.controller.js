@@ -13,20 +13,29 @@ import asyncHandler from "../../shared/utils/asyncHandler.js";
 import ApiError from "../../shared/utils/ApiError.js";
 import ApiResponse from "../../shared/utils/ApiResponse.js";
 import attempt from "../../shared/utils/attempt.js";
-// import { sendEmail } from "../../shared/utils/sendEmail.js"; // TODO: wire up once email system is built
+import sendVerificationEmail from "../../services/email/email.service.js";
 
+const PENDING_EMAIL_PREFIX = "pending-email:";
 const PENDING_REGISTRATION_PREFIX = "pending-registration:";
 const PENDING_REGISTRATION_TTL_SECONDS = 15 * 60;
 
-// TODO: Check the edge case where use tries to register with same email twice the current behavior is that 2 tokens will be generated for the same user
 const register = asyncHandler(async (req, res) => {
   let { username, email, password } = req.body;
+
+  const redisEmailKey = `${PENDING_EMAIL_PREFIX}${email}`;
+  const existingPendingRegistration = await redisClient.get(redisEmailKey);
+
+  if (existingPendingRegistration) {
+    throw new ApiError(
+      409,
+      "A verification email has already been sent. Please check your inbox or request a new one."
+    );
+  }
 
   const orConditions = [{ username }];
   if (email) orConditions.push({ email });
 
   const existingUser = await User.findOne({ $or: orConditions }).lean();
-
   if (existingUser) {
     throw new ApiError(409, "Username or email is already in use!");
   }
@@ -34,10 +43,9 @@ const register = asyncHandler(async (req, res) => {
   const hashedPassword = await argon2.hash(password, {
     type: argon2.argon2id,
   });
-
   const token = crypto.randomBytes(32).toString("hex");
-  const redisKey = `${PENDING_REGISTRATION_PREFIX}${token}`;
 
+  const redisTokenKey = `${PENDING_REGISTRATION_PREFIX}${token}`;
   const pendingPayload = {
     username,
     email,
@@ -45,27 +53,50 @@ const register = asyncHandler(async (req, res) => {
     createdAt: Date.now(),
   };
 
-  const setResult = await redisClient.set(
-    redisKey,
-    JSON.stringify(pendingPayload),
-    {
+  const [tokenResult, emailResult] = await Promise.all([
+    redisClient.set(redisTokenKey, JSON.stringify(pendingPayload), {
       EX: PENDING_REGISTRATION_TTL_SECONDS,
       NX: true,
-    }
-  );
+    }),
 
-  if (!setResult) {
+    redisClient.set(redisEmailKey, token, {
+      EX: PENDING_REGISTRATION_TTL_SECONDS,
+      NX: true,
+    }),
+  ]);
+
+  if (!tokenResult || !emailResult) {
+    await Promise.allSettled([
+      redisClient.del(redisTokenKey),
+      redisClient.del(redisEmailKey),
+    ]);
+
     throw new ApiError(
       500,
       "Failed to initiate registration, please try again!"
     );
   }
 
-  // TODO: send verification email once the email dispatch system is built.
-  // Should email a link/token to the frontend verification page, which then
-  // POSTs { token } to /verify. On send failure, roll back with:
-  //   await redisClient.del(redisKey);
-  // so a token never sits orphaned in Redis with no way to ever be delivered.
+  // TODO: Investigate why the error chain/stack brakes when thrown from the here.
+  const [error, data] = await attempt(
+    sendVerificationEmail(email, username, token)
+  );
+
+  if (error) {
+    console.log(`data: ${email} ${username}`, error);
+    await Promise.allSettled([
+      redisClient.del(redisTokenKey),
+      redisClient.del(redisEmailKey),
+    ]);
+
+    throw new ApiError(
+      500,
+      "Failed to send verification email. Please try again.",
+      error
+    );
+  }
+
+  console.log(data);
 
   return res
     .status(201)
@@ -73,7 +104,7 @@ const register = asyncHandler(async (req, res) => {
       new ApiResponse(
         201,
         true,
-        "Registration initiated. Verification email sending is not yet implemented.",
+        "Registration initiated. Verification email has been send to your email.",
         { username, email }
       )
     );
@@ -81,9 +112,9 @@ const register = asyncHandler(async (req, res) => {
 
 const verify = asyncHandler(async (req, res, next) => {
   const { token } = req.body;
-  const redisKey = `${PENDING_REGISTRATION_PREFIX}${token}`;
 
-  const rawPayload = await redisClient.getDel(redisKey);
+  const redisTokenKey = `${PENDING_REGISTRATION_PREFIX}${token}`;
+  const rawPayload = await redisClient.getDel(redisTokenKey);
 
   if (!rawPayload) {
     throw new ApiError(
@@ -93,13 +124,15 @@ const verify = asyncHandler(async (req, res, next) => {
   }
 
   const { username, email, hashedPassword } = JSON.parse(rawPayload);
+  const redisEmailKey = `${PENDING_EMAIL_PREFIX}${email}`;
 
   const orConditions = [{ username }];
   if (email) orConditions.push({ email });
 
   const existingUser = await User.findOne({ $or: orConditions }).lean();
-
   if (existingUser) {
+    // Cleanup the pending email lookup since the account now exists.
+    await redisClient.del(redisEmailKey);
     throw new ApiError(
       409,
       "Username or email was claimed by another account while this link was pending!"
@@ -117,11 +150,15 @@ const verify = asyncHandler(async (req, res, next) => {
       status: "active",
     })
   );
-  console.log(user);
-  if (error && error.code === 11000)
+
+  if (error && error.code === 11000) {
+    await redisClient.del(redisEmailKey);
     throw new ApiError(409, "Username or email is already in use!");
+  }
 
   if (error || !user) throw new ApiError(500, "Failed to create user!", error);
+
+  await redisClient.del(redisEmailKey);
 
   req.session.regenerate((err) => {
     if (err) return next(new ApiError(500, "Session regeneration failed"));
@@ -131,8 +168,6 @@ const verify = asyncHandler(async (req, res, next) => {
     req.session.save((err) => {
       if (err) return next(new ApiError(500, "Session save failed"));
 
-      const userData = user.toJSON();
-
       return res
         .status(201)
         .json(
@@ -140,7 +175,7 @@ const verify = asyncHandler(async (req, res, next) => {
             201,
             true,
             "Registration verified successfully!",
-            userData
+            user.toJSON()
           )
         );
     });

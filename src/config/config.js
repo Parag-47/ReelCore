@@ -9,6 +9,8 @@ const envVarsSchema = Joi.object({
   APP_NAME: Joi.string().required(),
   API_PREFIX: Joi.string().default("/api/v1"),
 
+  FRONTEND_URL: Joi.string().required().description("Frontend Base URL"),
+
   // DATABASE
   DATABASE_URL: Joi.string()
     .required()
@@ -20,6 +22,10 @@ const envVarsSchema = Joi.object({
   // REDIS_PASSWORD: Joi.string().allow("").default(""),
   REDIS_URI: Joi.string().required(),
 
+  RESEND_KEY: Joi.string().required(),
+  EMAIL_FROM: Joi.string().required(),
+  EMAIL_SENDER_NAME: Joi.string().required(),
+
   // SESSION SECRETES
   SESSION_SECRET: Joi.string().min(32).required(),
   SESSION_ENCRYPT_SECRET: Joi.string().min(32).required(),
@@ -29,10 +35,10 @@ const envVarsSchema = Joi.object({
   CSRF_SECRET: Joi.string().min(32).required(),
 
   // JWT
-  JWT_ACCESS_SECRET: Joi.string().min(32).required(),
-  JWT_REFRESH_SECRET: Joi.string().min(32).required(),
-  JWT_ACCESS_EXPIRES_IN: Joi.string().required(),
-  JWT_REFRESH_EXPIRES_IN: Joi.string().required(),
+  // JWT_ACCESS_SECRET: Joi.string().min(32).required(),
+  // JWT_REFRESH_SECRET: Joi.string().min(32).required(),
+  // JWT_ACCESS_EXPIRES_IN: Joi.string().required(),
+  // JWT_REFRESH_EXPIRES_IN: Joi.string().required(),
 
   // BCRYPT
   BCRYPT_SALT_ROUNDS: Joi.number().integer().min(8).max(15).default(12),
@@ -87,8 +93,16 @@ const config = {
   port: envVars.PORT,
   apiPrefix: envVars.API_PREFIX,
 
+  frontendURL: envVars.FRONTEND_URL,
+
   dbURI: envVars.DATABASE_URL,
   redisURI: envVars.REDIS_URI,
+
+  resendConfig: {
+    key: envVars.RESEND_KEY,
+    emailFrom: envVars.EMAIL_FROM,
+    emailSenderName: envVars.EMAIL_SENDER_NAME,
+  },
 
   sessionSecret: envVars.SESSION_SECRET,
   sessionEncryptSecret: envVars.SESSION_ENCRYPT_SECRET,
@@ -96,12 +110,12 @@ const config = {
   cookieSecret: envVars.COOKIE_SECRET,
   csrfSecret: envVars.CSRF_SECRET,
 
-  jwt: {
-    accessSecret: envVars.JWT_ACCESS_SECRET,
-    refreshSecret: envVars.JWT_REFRESH_SECRET,
-    accessExpiresIn: envVars.JWT_ACCESS_EXPIRES_IN,
-    refreshExpiresIn: envVars.JWT_REFRESH_EXPIRES_IN,
-  },
+  // jwt: {
+  //   accessSecret: envVars.JWT_ACCESS_SECRET,
+  //   refreshSecret: envVars.JWT_REFRESH_SECRET,
+  //   accessExpiresIn: envVars.JWT_ACCESS_EXPIRES_IN,
+  //   refreshExpiresIn: envVars.JWT_REFRESH_EXPIRES_IN,
+  // },
 
   saltRounds: envVars.BCRYPT_SALT_ROUNDS,
 
