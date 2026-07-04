@@ -82,6 +82,11 @@ const userSchema = new Schema(
       default: null,
       select: false,
     },
+    lockoutCount: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
     lastFailedLoginAt: {
       type: Date,
       default: null,
@@ -147,4 +152,6 @@ userSchema.set("toObject", userSchema.get("toJSON"));
 userSchema.index({ status: 1 });
 // userSchema.index({ role: 1 });
 
-export default model("User", userSchema);
+const User = model("User", userSchema);
+
+export default User;

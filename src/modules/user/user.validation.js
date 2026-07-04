@@ -33,21 +33,22 @@ const checkFakeEmail = async (value, helpers) => {
 const registerUser = {
   body: Joi.object({
     email: Joi.string()
+      .max(254)
       .trim()
       .lowercase()
-      .max(254)
       .email({ tlds: { allow: false } })
       .external(checkFakeEmail)
       .required(),
     username: Joi.string()
-      .trim()
       .min(3)
       .max(50)
+      .trim()
       .pattern(/^[a-zA-Z0-9_.]+$/)
       .required(),
     password: Joi.string()
       .min(8)
       .max(128)
+      .trim()
       .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_])/)
       .messages({
         "string.pattern.base":
@@ -63,4 +64,11 @@ const verifyUser = {
   }),
 };
 
-export { registerUser, verifyUser };
+const loginUser = {
+  body: Joi.object({
+    identifier: Joi.string().min(3).max(255).trim().lowercase().required(),
+    password: Joi.string().min(8).max(128).trim().required(),
+  }),
+};
+
+export { registerUser, verifyUser, loginUser };

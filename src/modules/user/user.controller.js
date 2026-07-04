@@ -15,9 +15,19 @@ import ApiResponse from "../../shared/utils/ApiResponse.js";
 import attempt from "../../shared/utils/attempt.js";
 import sendVerificationEmail from "../../services/email/email.service.js";
 
+// TODO: Move this over to env and config file depending on the variable
 const PENDING_EMAIL_PREFIX = "pending-email:";
 const PENDING_REGISTRATION_PREFIX = "pending-registration:";
 const PENDING_REGISTRATION_TTL_SECONDS = 15 * 60;
+const BASE_LOCKOUT_MS = 1 * 60 * 1000; // 1 min
+const MAX_LOCKOUT_MS = 24 * 60 * 60 * 1000; // 24 hr cap
+const SESSION_NAME = "__Host-sid";
+const clearCookieOptions = {
+  path: "/",
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+};
 
 const register = asyncHandler(async (req, res) => {
   let { username, email, password } = req.body;
@@ -182,4 +192,140 @@ const verify = asyncHandler(async (req, res, next) => {
   });
 });
 
-export { register, verify };
+// Generated once at boot so a "no such user" login takes roughly the same
+// time as a real one — otherwise response time leaks whether an
+// email/username exists (classic enumeration side-channel).
+const DUMMY_PASSWORD_HASH = await argon2.hash(
+  crypto.randomBytes(32).toString("hex"),
+  { type: argon2.argon2id }
+);
+
+// TODO: Add captcha system later
+const login = asyncHandler(async (req, res, next) => {
+  const { identifier, password } = req.body; // identifier = username OR email
+
+  const isEmail = identifier.includes("@");
+  const query = isEmail ? { email: identifier } : { username: identifier };
+
+  const user = await User.findOne(query).select(
+    "+password +failedLoginAttempts +lockoutUntil +lockoutCount +lastFailedLoginAt"
+  );
+
+  if (user?.lockoutUntil && user.lockoutUntil > new Date()) {
+    const minutesLeft = Math.ceil((user.lockoutUntil - Date.now()) / 60000);
+    throw new ApiError(
+      429,
+      `Too many failed attempts. Try again in ${minutesLeft} minute(s).`
+    );
+  }
+
+  const hashToVerify = user?.password ?? DUMMY_PASSWORD_HASH;
+
+  const [verifyError, isPasswordValid] = await attempt(
+    argon2.verify(hashToVerify, password)
+  );
+
+  if (verifyError) {
+    throw new ApiError(500, "Failed to verify credentials.", verifyError);
+  }
+
+  if (!user || user.deletedAt || !user.password || !isPasswordValid) {
+    if (user?.password) await registerFailedAttempt(user._id);
+    throw new ApiError(401, "Invalid username/email or password.");
+  }
+
+  if (user.status === "suspended") {
+    throw new ApiError(403, "This account has been suspended.");
+  }
+
+  await User.updateOne(
+    { _id: user._id },
+    {
+      $set: {
+        failedLoginAttempts: 0,
+        lockoutUntil: null,
+        lockoutCount: 0,
+        lastLoginAt: new Date(),
+        lastLoginIp: req.ip,
+      },
+    }
+  );
+
+  req.session.regenerate((err) => {
+    if (err) return next(new ApiError(500, "Session regeneration failed"));
+
+    req.session.userId = user._id;
+
+    req.session.save((err) => {
+      if (err) return next(new ApiError(500, "Session save failed"));
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, true, "Login successful!", user.toJSON()));
+    });
+  });
+});
+
+// Atomic $inc avoids the read-modify-write race you'd get from
+// `user.failedLoginAttempts++; user.save()` under concurrent bad requests.
+async function registerFailedAttempt(userId) {
+  const updated = await User.findOneAndUpdate(
+    { _id: userId },
+    {
+      $inc: { failedLoginAttempts: 1 },
+      $set: { lastFailedLoginAt: new Date() },
+    },
+    {
+      new: true,
+      projection: { failedLoginAttempts: 1, lockoutCount: 1 },
+    }
+  );
+
+  if (updated.failedLoginAttempts < MAX_FAILED_ATTEMPTS) return;
+
+  const lockoutDuration = Math.min(
+    BASE_LOCKOUT_MS * 2 ** updated.lockoutCount,
+    MAX_LOCKOUT_MS
+  );
+
+  const result = await User.updateOne(
+    { _id: userId, failedLoginAttempts: updated.failedLoginAttempts },
+    {
+      $set: {
+        failedLoginAttempts: 0,
+        lockoutUntil: new Date(Date.now() + lockoutDuration),
+      },
+      $inc: { lockoutCount: 1 },
+    }
+  );
+
+  if (result.modifiedCount === 1) {
+    logger.info("Account locked out", {
+      userId,
+      lockoutCount: updated.lockoutCount + 1,
+      lockoutDurationMs: lockoutDuration,
+    });
+  }
+}
+
+const logout = asyncHandler(async (req, res, next) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return next(new ApiError(500, "Failed to log out, please try again."));
+    }
+
+    res.clearCookie(SESSION_NAME, {
+      path: "/",
+      httpOnly: true,
+      secure: true, // __Host- prefix REQUIRES secure=true
+      sameSite: "lax",
+    });
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, true, "Logged out successfully!"));
+  });
+});
+
+// TODO: Add logout from all devices option and also use it on password change.
+export { register, verify, login, logout };

@@ -17,6 +17,7 @@ import {
 import errorHandler from "./middlewares/errorHandler.middleware.js";
 import router from "./modules/routes/index.js";
 
+//TODO: Move all the config properties into the config file
 const app = express();
 
 // app.set("trust proxy", 1); //Set to 1 only if exactly one reverse proxy sits in front
