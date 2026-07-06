@@ -4,7 +4,7 @@
 // Without it every thrown ApiError here collapses to a generic 500 in prod.
 // =============================================================================
 
-import crypto from "crypto";
+import crypto from "node:crypto";
 import argon2 from "argon2";
 
 import User from "./user.model.js";
@@ -13,6 +13,7 @@ import asyncHandler from "../../utils/asyncHandler.js";
 import ApiError from "../../utils/ApiError.js";
 import ApiResponse from "../../utils/ApiResponse.js";
 import attempt from "../../utils/attempt.js";
+import logger from "../../utils/logger.js";
 import sendVerificationEmail from "../../services/email/email.service.js";
 import { COOKIE_OPTIONS } from "../../config/config.js";
 import {
@@ -83,7 +84,7 @@ const register = asyncHandler(async (req, res) => {
   }
 
   // TODO: Investigate why the error chain/stack brakes when thrown from the here.
-  const [error, data] = await attempt(
+  const [error, _data] = await attempt(
     sendVerificationEmail(email, username, token)
   );
 

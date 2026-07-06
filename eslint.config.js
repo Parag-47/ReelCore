@@ -63,7 +63,7 @@ export default [
       "unicorn/no-null": "off",
       "unicorn/prefer-top-level-await": "off",
       "unicorn/name-replacements": "off",
-      " unicorn/default-export-style": ["error", { functions: "ignore" }],
+      "unicorn/default-export-style": ["error", { functions: "ignore" }],
 
       // Security
 

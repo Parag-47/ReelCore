@@ -40,7 +40,7 @@ const authLimiter = rateLimit({
   skipSuccessfulRequests: true,
 
   handler(req, res) {
-    loggerer.warn({ ip: req.ip }, "Auth brute-force protection triggered");
+    logger.warn({ ip: req.ip }, "Auth brute-force protection triggered");
 
     res.status(429).json({
       status: "error",

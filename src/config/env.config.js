@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/numeric-separators-style */
 import Joi from "joi";
 
 const envVarsSchema = Joi.object({

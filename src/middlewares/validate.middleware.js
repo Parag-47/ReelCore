@@ -1,4 +1,3 @@
-import Joi from "joi";
 import ApiError from "../utils/ApiError.js";
 import ValidationError from "../utils/ValidationError.js";
 
@@ -24,7 +23,7 @@ const validate = (schemas) => async (req, _res, next) => {
           errors.push(
             ...joiError.details.map((d) => ({
               field: `${target}.${d.path.join(".")}`,
-              message: d.message.replace(/['"]/g, ""),
+              message: d.message.replaceAll(/['"]/g, ""),
               type: d.type,
             }))
           );
