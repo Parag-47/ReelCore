@@ -1,17 +1,17 @@
 import http from "node:http";
 import mongoose from "mongoose";
 import app from "./app.js";
-import config from "./config/config.js";
-import connectDB from "./config/mongo.js";
-import redisClient from "./config/redisClient.js";
-import logger from "./config/logger.js";
+import { ENV } from "./config/config.js";
+import connectDB from "./providers/mongo.js";
+import redisClient from "./providers/redisClient.js";
+import logger from "./utils/logger.js";
 
 process.on("uncaughtException", (err) => {
   logger.error("UNCAUGHT EXCEPTION — terminating immediately", { err });
   process.exit(1);
 });
 
-const PORT = parseInt(config.port, 10) || 5000;
+const PORT = parseInt(ENV.PORT, 10) || 5000;
 const server = http.createServer(app);
 
 async function startServer() {
@@ -27,7 +27,7 @@ async function startServer() {
       server.once("error", reject);
     });
 
-    logger.info(`Server running in ${config.nodeEnv} mode on port ${PORT}`);
+    logger.info(`Server running in ${ENV.NODE_ENV} mode on port ${PORT}`);
   } catch (err) {
     logger.error("Server initialisation failed — terminating", { err });
     process.exit(1);

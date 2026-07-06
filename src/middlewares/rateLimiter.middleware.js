@@ -1,10 +1,15 @@
 import rateLimit from "express-rate-limit";
 import slowDown from "express-slow-down";
-import logger from "../config/logger.js";
+import logger from "../utils/logger.js";
+import {
+  GLOBAL_RATE_LIMIT,
+  AUTH_RATE_LIMIT,
+  SPEED_LIMIT,
+} from "../config/config.js";
 
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 100,
+  windowMs: GLOBAL_RATE_LIMIT.windowMs,
+  limit: GLOBAL_RATE_LIMIT.limit,
   standardHeaders: "draft-8",
   legacyHeaders: false,
 
@@ -22,14 +27,14 @@ const globalLimiter = rateLimit({
 });
 
 const speedLimiter = slowDown({
-  windowMs: 15 * 60 * 1000,
-  delayAfter: 50,
-  delayMs: () => 500,
+  windowMs: SPEED_LIMIT.windowMs,
+  delayAfter: SPEED_LIMIT.delayAfter,
+  delayMs: SPEED_LIMIT.delayMs,
 });
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
+  windowMs: AUTH_RATE_LIMIT.windowMs,
+  limit: AUTH_RATE_LIMIT.limit,
   standardHeaders: "draft-8",
   legacyHeaders: false,
   skipSuccessfulRequests: true,

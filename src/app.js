@@ -6,9 +6,8 @@ import hpp from "hpp";
 import session from "express-session";
 import { doubleCsrf } from "csrf-csrf";
 import morgan from "morgan";
-import config from "./config/config.js";
-import logger from "./config/logger.js";
-import redisStore from "./config/redisSessionStore.js";
+import { ENV, COOKIE_OPTIONS, SESSION_OPTIONS } from "./config/config.js";
+import logger from "./utils/logger.js";
 import {
   globalLimiter,
   speedLimiter,
@@ -41,7 +40,7 @@ app.use(helmet()); //For now only using default config
 // Don't know if it's needed
 // app.use((req, res, next) => {
 //   if (
-//     config.nodeEnv === 'production' &&
+//     ENV.NODE_ENV === 'production' &&
 //     !req.secure
 //   ) {
 //     return res.redirect(301, `https://${req.headers.host}${req.url}`);
@@ -51,7 +50,7 @@ app.use(helmet()); //For now only using default config
 // });
 
 // CORS
-const ALLOWED_ORIGINS = (config.allowedOrigins ?? "")
+const allowedOrigins = (ENV.ALLOWED_ORIGINS ?? "")
   .split(",")
   .map((o) => o.trim())
   .filter(Boolean);
@@ -61,7 +60,7 @@ app.use(
     origin(origin, cb) {
       if (!origin) return cb(null, true);
 
-      if (ALLOWED_ORIGINS.includes(origin)) {
+      if (allowedOrigins.includes(origin)) {
         return cb(null, true);
       }
 
@@ -228,42 +227,20 @@ app.use(
     stream: {
       write: (msg) => logger.http(msg.trim()),
     },
-    skip: () => config.nodeEnv === "test",
+    skip: () => ENV.NODE_ENV === "test",
   })
 );
 
-const cookieOptions = {
-  httpOnly: true,
-  secure: config.nodeEnv === "production",
-  // use "lax" for same-site SPA
-  // use "none" only if frontend is cross-site
-  sameSite: "lax",
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-  priority: "high",
-  path: "/",
-};
-
-app.use(
-  session({
-    store: redisStore,
-    name: "__Host-sid",
-    secret: config.sessionSecret,
-    resave: false,
-    saveUninitialized: false,
-    rolling: false,
-    proxy: config.nodeEnv === "production",
-    cookie: cookieOptions,
-  })
-);
+app.use(session(SESSION_OPTIONS));
 
 // CSRF - Probably not needed.
 // const { doubleCsrfProtection, generateToken } = doubleCsrf({
-//   getSecret: () => config.csrfSecret,
+//   getSecret: () => ENV.CSRF_SECRET,
 
 //   cookieName: "__Host-csrf",
 
 //   cookieOptions: {
-//     secure: config.nodeEnv === "production",
+//     secure: ENV.NODE_ENV === "production",
 //     sameSite: "lax",
 //     httpOnly: true,
 //     path: "/",

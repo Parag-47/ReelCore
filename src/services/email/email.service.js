@@ -1,10 +1,14 @@
-import { resend, EMAIL_FROM, EMAIL_SENDER_NAME } from "../../config/resend.js";
-import config from "../../config/config.js";
-import ApiError from "../../shared/utils/ApiError.js";
+import {
+  resend,
+  EMAIL_FROM,
+  EMAIL_SENDER_NAME,
+} from "../../providers/resend.js";
+import { ENV } from "../../config/config.js";
+import ApiError from "../../utils/ApiError.js";
 
 // TODO: create a template and use the template here
 const sendVerificationEmail = async (to, username, token) => {
-  const verificationUrl = `${config.frontendURL}/verify?token=${token}`;
+  const verificationUrl = `${ENV.FRONTEND_URL}/verify?token=${token}`;
 
   const { data, error } = await resend.emails.send({
     from: `${EMAIL_SENDER_NAME} <${EMAIL_FROM}>`,

@@ -1,5 +1,5 @@
 // =============================================================================
-// ApiError NOTE (action needed on your side):
+// ApiError NOTE:
 // Uncomment `this.isOperational = true;` in your actual ApiError.js.
 // Without it every thrown ApiError here collapses to a generic 500 in prod.
 // =============================================================================
@@ -8,26 +8,21 @@ import crypto from "crypto";
 import argon2 from "argon2";
 
 import User from "./user.model.js";
-import redisClient from "../../config/redisClient.js";
-import asyncHandler from "../../shared/utils/asyncHandler.js";
-import ApiError from "../../shared/utils/ApiError.js";
-import ApiResponse from "../../shared/utils/ApiResponse.js";
-import attempt from "../../shared/utils/attempt.js";
+import redisClient from "../../providers/redisClient.js";
+import asyncHandler from "../../utils/asyncHandler.js";
+import ApiError from "../../utils/ApiError.js";
+import ApiResponse from "../../utils/ApiResponse.js";
+import attempt from "../../utils/attempt.js";
 import sendVerificationEmail from "../../services/email/email.service.js";
-
-// TODO: Move this over to env and config file depending on the variable
-const PENDING_EMAIL_PREFIX = "pending-email:";
-const PENDING_REGISTRATION_PREFIX = "pending-registration:";
-const PENDING_REGISTRATION_TTL_SECONDS = 15 * 60;
-const BASE_LOCKOUT_MS = 1 * 60 * 1000; // 1 min
-const MAX_LOCKOUT_MS = 24 * 60 * 60 * 1000; // 24 hr cap
-const SESSION_NAME = "__Host-sid";
-const clearCookieOptions = {
-  path: "/",
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax",
-};
+import { COOKIE_OPTIONS } from "../../config/config.js";
+import {
+  PENDING_EMAIL_PREFIX,
+  PENDING_REGISTRATION_PREFIX,
+  PENDING_REGISTRATION_TTL_SECONDS,
+  MAX_FAILED_ATTEMPTS,
+  BASE_LOCKOUT_MS,
+  MAX_LOCKOUT_MS,
+} from "./user.constants.js";
 
 const register = asyncHandler(async (req, res) => {
   let { username, email, password } = req.body;
@@ -105,8 +100,6 @@ const register = asyncHandler(async (req, res) => {
       error
     );
   }
-
-  console.log(data);
 
   return res
     .status(201)
@@ -314,12 +307,7 @@ const logout = asyncHandler(async (req, res, next) => {
       return next(new ApiError(500, "Failed to log out, please try again."));
     }
 
-    res.clearCookie(SESSION_NAME, {
-      path: "/",
-      httpOnly: true,
-      secure: true, // __Host- prefix REQUIRES secure=true
-      sameSite: "lax",
-    });
+    res.clearCookie(SESSION_NAME, COOKIE_OPTIONS);
 
     return res
       .status(200)

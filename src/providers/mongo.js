@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
-import config from "./config.js";
-import logger from "./logger.js";
+import { ENV } from "../config/config.js";
+import logger from "../utils/logger.js";
 
 const connectDB = async () => {
   mongoose.set("sanitizeFilter", true); // Primary NoSQL injection guard
@@ -8,7 +8,7 @@ const connectDB = async () => {
   mongoose.set("strictQuery", true); // Reject unknown query fields
   mongoose.set("bufferCommands", false); // Fail fast if DB is down
 
-  const conn = await mongoose.connect(config.dbURI, {
+  const conn = await mongoose.connect(ENV.DATABASE_URL, {
     maxPoolSize: 10,
     minPoolSize: 2,
     serverSelectionTimeoutMS: 5_000,

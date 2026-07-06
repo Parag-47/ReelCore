@@ -1,10 +1,10 @@
 import Joi from "joi";
 import wretch from "wretch";
-import logger from "../../config/logger.js";
-import ValidationError from "../../shared/utils/ValidationError.js";
-import { debounceURI } from "../../shared/constants/constants.js";
+import logger from "../../utils/logger.js";
+import ValidationError from "../../utils/ValidationError.js";
+import { DEBOUNCE_URI } from "./user.constants.js";
 
-const api = wretch(debounceURI);
+const api = wretch(DEBOUNCE_URI);
 
 const checkFakeEmail = async (value, helpers) => {
   try {

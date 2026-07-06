@@ -1,5 +1,5 @@
 import { createLogger, format, transports } from "winston";
-import config from "./config.js";
+import { ENV } from "../config/config.js";
 
 const { combine, timestamp, errors, colorize, printf, json } = format;
 
@@ -76,9 +76,8 @@ const prodFormat = combine(
 );
 
 const logger = createLogger({
-  level:
-    config.logLevel || (config.nodeEnv === "production" ? "warn" : "debug"),
-  format: config.nodeEnv === "production" ? prodFormat : devFormat,
+  level: ENV.LOG_LEVEL || (ENV.NODE_ENV === "production" ? "warn" : "debug"),
+  format: ENV.NODE_ENV === "production" ? prodFormat : devFormat,
   transports: [new transports.Console()],
   exitOnError: false,
 });

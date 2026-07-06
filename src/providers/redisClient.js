@@ -1,9 +1,9 @@
 import { createClient } from "redis";
-import config from "./config.js";
-import logger from "./logger.js";
+import { ENV } from "../config/config.js";
+import logger from "../utils/logger.js";
 
 const redisClient = createClient({
-  url: config.redisURI,
+  url: ENV.REDIS_URI,
 
   socket: {
     connectTimeout: 10000,

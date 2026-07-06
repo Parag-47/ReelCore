@@ -1,5 +1,5 @@
-import logger from "../config/logger.js";
-import ApiError from "../shared/utils/ApiError.js";
+import logger from "../utils/logger.js";
+import ApiError from "../utils/ApiError.js";
 
 const handleCastError = (e) =>
   new ApiError(400, `Invalid ${e.path}: ${e.value}`);

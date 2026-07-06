@@ -1,6 +1,6 @@
 import Joi from "joi";
-import ApiError from "../shared/utils/ApiError.js";
-import ValidationError from "../shared/utils/ValidationError.js";
+import ApiError from "../utils/ApiError.js";
+import ValidationError from "../utils/ValidationError.js";
 
 const validate = (schemas) => async (req, _res, next) => {
   const targets = ["body", "query", "params"].filter((k) => schemas[k]);
