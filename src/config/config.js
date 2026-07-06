@@ -48,8 +48,9 @@ const SPEED_LIMIT = {
   delayMs: () => 500,
 };
 
+export { default as ENV } from "./env.config.js";
+
 export {
-  ENV,
   SESSION_NAME,
   SESSION_OPTIONS,
   COOKIE_OPTIONS,

@@ -16,6 +16,8 @@
   "main": "server.js",
   "scripts": {
     "start": "nodemon --env-file=.env src/server.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
@@ -40,5 +42,17 @@
     "uuid": "^14.0.1",
     "winston": "^3.19.0",
     "wretch": "^3.0.9"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-n": "^18.2.1",
+    "eslint-plugin-promise": "^7.3.0",
+    "eslint-plugin-security": "^4.0.1",
+    "eslint-plugin-sonarjs": "^4.1.0",
+    "eslint-plugin-unicorn": "^71.0.0",
+    "globals": "^17.7.0"
   }
 }

@@ -1,12 +1,13 @@
+/* eslint-disable unicorn/no-top-level-side-effects */
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import timeout from "connect-timeout";
 import hpp from "hpp";
 import session from "express-session";
-import { doubleCsrf } from "csrf-csrf";
+// import { doubleCsrf } from "csrf-csrf";
 import morgan from "morgan";
-import { ENV, COOKIE_OPTIONS, SESSION_OPTIONS } from "./config/config.js";
+import { ENV, SESSION_OPTIONS } from "./config/config.js";
 import logger from "./utils/logger.js";
 import {
   globalLimiter,
@@ -16,7 +17,7 @@ import {
 import errorHandler from "./middlewares/errorHandler.middleware.js";
 import router from "./modules/routes/index.js";
 
-//TODO: Move all the config properties into the config file
+// TODO: Move all the config properties into the config file
 const app = express();
 
 // app.set("trust proxy", 1); //Set to 1 only if exactly one reverse proxy sits in front
@@ -50,21 +51,23 @@ app.use(helmet()); //For now only using default config
 // });
 
 // CORS
-const allowedOrigins = (ENV.ALLOWED_ORIGINS ?? "")
-  .split(",")
-  .map((o) => o.trim())
-  .filter(Boolean);
+const allowedOrigins = new Set(
+  (ENV.ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean)
+);
 
 app.use(
   cors({
-    origin(origin, cb) {
-      if (!origin) return cb(null, true);
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
 
-      if (allowedOrigins.includes(origin)) {
-        return cb(null, true);
+      if (allowedOrigins.has(origin)) {
+        return callback(null, true);
       }
 
-      cb(
+      callback(
         Object.assign(new Error(`CORS blocked: ${origin}`), {
           statusCode: 403,
         })
@@ -112,100 +115,100 @@ app.use(
 // });
 
 // NOSQL SANITIZATION
-const isPlainObject = (value) => {
-  // Move this into utils
-  if (!value || typeof value !== "object") return false;
-  const proto = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
-};
+// const isPlainObject = (value) => {
+//   // Move this into utils
+//   if (!value || typeof value !== "object") return false;
+//   const proto = Object.getPrototypeOf(value);
+//   return proto === Object.prototype || proto === null;
+// };
 
-const sanitizeValue = (root) => {
-  // Move this into utils
-  // Primitives (including null) are returned directly
-  if (!root || typeof root !== "object") {
-    return root;
-  }
+// const sanitizeValue = (root) => {
+//   // Move this into utils
+//   // Primitives (including null) are returned directly
+//   if (!root || typeof root !== "object") {
+//     return root;
+//   }
 
-  const seen = new WeakMap(); // source -> clone (or atomic passthrough)
-  const stack = []; // work items: { source, clone }
+//   const seen = new WeakMap(); // source -> clone (or atomic passthrough)
+//   const stack = []; // work items: { source, clone }
 
-  /**
-   * Initialise a clone for `value`, register it in `seen`, and push
-   * a work item onto the stack if the value needs internal processing.
-   * Returns the (possibly unfinished) clone immediately.
-   */
-  const initClone = (value) => {
-    if (!value || typeof value !== "object") {
-      return value; // primitives pass through
-    }
+//   /**
+//    * Initialise a clone for `value`, register it in `seen`, and push
+//    * a work item onto the stack if the value needs internal processing.
+//    * Returns the (possibly unfinished) clone immediately.
+//    */
+//   const initClone = (value) => {
+//     if (!value || typeof value !== "object") {
+//       return value; // primitives pass through
+//     }
 
-    // Circular / repeated reference
-    if (seen.has(value)) {
-      return seen.get(value);
-    }
+//     // Circular / repeated reference
+//     if (seen.has(value)) {
+//       return seen.get(value);
+//     }
 
-    // Array
-    if (Array.isArray(value)) {
-      const clone = [];
-      seen.set(value, clone);
-      stack.push({ source: value, clone });
-      return clone;
-    }
+//     // Array
+//     if (Array.isArray(value)) {
+//       const clone = [];
+//       seen.set(value, clone);
+//       stack.push({ source: value, clone });
+//       return clone;
+//     }
 
-    // Plain object – the only type we sanitize deeply
-    if (isPlainObject(value)) {
-      const clone = {};
-      seen.set(value, clone);
-      stack.push({ source: value, clone });
-      return clone;
-    }
+//     // Plain object – the only type we sanitize deeply
+//     if (isPlainObject(value)) {
+//       const clone = {};
+//       seen.set(value, clone);
+//       stack.push({ source: value, clone });
+//       return clone;
+//     }
 
-    // Exotic objects (Date, Buffer, RegExp, etc.) – treat as atomic leaves
-    // They are returned as-is. We still register them so that
-    // repeated references to the same exotic object share identity.
-    seen.set(value, value);
-    return value;
-  };
+//     // Exotic objects (Date, Buffer, RegExp, etc.) – treat as atomic leaves
+//     // They are returned as-is. We still register them so that
+//     // repeated references to the same exotic object share identity.
+//     seen.set(value, value);
+//     return value;
+//   };
 
-  // 1. Create the root clone (the entry point into the stack)
-  const rootClone = initClone(root);
+//   // 1. Create the root clone (the entry point into the stack)
+//   const rootClone = initClone(root);
 
-  // 2. Process the stack iteratively – no recursion, no call‑stack explosion
-  while (stack.length > 0) {
-    const { source, clone } = stack.pop();
+//   // 2. Process the stack iteratively – no recursion, no call‑stack explosion
+//   while (stack.length > 0) {
+//     const { source, clone } = stack.pop();
 
-    if (Array.isArray(source)) {
-      // Copy every element, sanitizing each recursively
-      for (let i = 0; i < source.length; i++) {
-        clone[i] = initClone(source[i]);
-      }
-    } else {
-      // Plain object – filter keys and sanitize values
-      for (const key of Object.keys(source)) {
-        // ----- Prototype pollution guard -----
-        if (
-          key === "__proto__" ||
-          key === "constructor" ||
-          key === "prototype"
-        ) {
-          logger.warn({ key }, "Blocked prototype pollution attempt");
-          continue;
-        }
+//     if (Array.isArray(source)) {
+//       // Copy every element, sanitizing each recursively
+//       for (let i = 0; i < source.length; i++) {
+//         clone[i] = initClone(source[i]);
+//       }
+//     } else {
+//       // Plain object – filter keys and sanitize values
+//       for (const key of Object.keys(source)) {
+//         // ----- Prototype pollution guard -----
+//         if (
+//           key === "__proto__" ||
+//           key === "constructor" ||
+//           key === "prototype"
+//         ) {
+//           logger.warn({ key }, "Blocked prototype pollution attempt");
+//           continue;
+//         }
 
-        // ----- MongoDB operator guard -----
-        if (key.startsWith("$") || key.includes(".")) {
-          logger.warn({ key }, "Blocked suspicious MongoDB operator");
-          continue;
-        }
+//         // ----- MongoDB operator guard -----
+//         if (key.startsWith("$") || key.includes(".")) {
+//           logger.warn({ key }, "Blocked suspicious MongoDB operator");
+//           continue;
+//         }
 
-        // Recursively sanitize the value and assign it
-        clone[key] = initClone(source[key]);
-      }
-    }
-  }
+//         // Recursively sanitize the value and assign it
+//         clone[key] = initClone(source[key]);
+//       }
+//     }
+//   }
 
-  return rootClone;
-};
+//   return rootClone;
+// };
 
 // app.use((req, _res, next) => {
 //   if (req.body) req.body = sanitizeValue(req.body);
