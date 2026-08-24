@@ -1,13 +1,19 @@
-// =============================================================================
 // ApiError NOTE:
-// Uncomment `this.isOperational = true;` in your actual ApiError.js.
+// Uncomment `this.isOperational = true;` in ApiError.js.
 // Without it every thrown ApiError here collapses to a generic 500 in prod.
-// =============================================================================
 
 import crypto from "node:crypto";
 import argon2 from "argon2";
+import {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+} from "@simplewebauthn/server";
+import { isoUint8Array } from "@simplewebauthn/server/helpers";
 
-import User from "./user.model.js";
+import User from "../user/user.model.js";
+import Passkey from "./passkey.model.js";
 import redisClient from "../../providers/redisClient.js";
 import asyncHandler from "../../utils/asyncHandler.js";
 import ApiError from "../../utils/ApiError.js";
@@ -15,7 +21,7 @@ import ApiResponse from "../../utils/ApiResponse.js";
 import attempt from "../../utils/attempt.js";
 import logger from "../../utils/logger.js";
 import sendVerificationEmail from "../../services/email/email.service.js";
-import { COOKIE_OPTIONS } from "../../config/config.js";
+import { SESSION_NAME, COOKIE_OPTIONS, WEBAUTHN } from "../../config/config.js";
 import {
   PENDING_EMAIL_PREFIX,
   PENDING_REGISTRATION_PREFIX,
@@ -23,7 +29,7 @@ import {
   MAX_FAILED_ATTEMPTS,
   BASE_LOCKOUT_MS,
   MAX_LOCKOUT_MS,
-} from "./user.constants.js";
+} from "./auth.constants.js";
 
 const register = asyncHandler(async (req, res) => {
   let { username, email, password } = req.body;
@@ -246,18 +252,37 @@ const login = asyncHandler(async (req, res, next) => {
   );
 
   req.session.regenerate((err) => {
-    if (err) return next(new ApiError(500, "Session regeneration failed"));
+    console.log("Error: ", err);
+    if (err) return next(new ApiError(500, "Failed to login!", err));
 
     req.session.userId = user._id;
+    req.session.userIp = req.ip;
+    req.session.loginAt = Date.now();
 
     req.session.save((err) => {
-      if (err) return next(new ApiError(500, "Session save failed"));
+      if (err) return next(new ApiError(500, "Failed to login!"));
 
       return res
         .status(200)
         .json(new ApiResponse(200, true, "Login successful!", user.toJSON()));
     });
   });
+});
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+  const { id } = req.user;
+
+  const userQuery = User.findById(id);
+  const [userError, user] = await attempt(userQuery);
+
+  if (userError) throw new ApiError(500, "Failed to fetch user", userError);
+  if (!user) throw new ApiError(404, "User not found!");
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, true, "User fetched successfully", user.toJSON())
+    );
 });
 
 // Atomic $inc avoids the read-modify-write race you'd get from
@@ -317,4 +342,201 @@ const logout = asyncHandler(async (req, res, next) => {
 });
 
 // TODO: Add logout from all devices option and also use it on password change.
-export { register, verify, login, logout };
+
+const generatePasskeyRegisterOptions = asyncHandler(async (req, res) => {
+  const { id } = req.user;
+
+  const userQuery = User.findById(id).select("+webAuthnUserId username");
+  const [userError, user] = await attempt(userQuery);
+  if (userError) throw new ApiError(500, "Failed to fetch user", userError);
+  if (!user) throw new ApiError(404, "User not found!");
+
+  const passkeysQuery = Passkey.find({ userId: id }).select(
+    "credentialId transports"
+  );
+  const [passkeysError, existingPasskeys] = await attempt(passkeysQuery);
+  if (passkeysError)
+    throw new ApiError(500, "Failed to fetch existing passkeys", passkeysError);
+
+  const options = await generateRegistrationOptions({
+    rpName: WEBAUTHN.rpName,
+    rpID: WEBAUTHN.rpID,
+    userName: user.username || user.email,
+    userDisplayName: user.username || user.email, // avoids a blank-name bug on some hybrid/QR flows
+    userID: isoUint8Array.fromUTF8String(user.webAuthnUserId),
+    attestationType: "none",
+    excludeCredentials: existingPasskeys.map((passkey) => ({
+      id: passkey.credentialId,
+      transports: passkey.transports,
+    })),
+    authenticatorSelection: {
+      residentKey: "preferred",
+      userVerification: "preferred",
+      authenticatorAttachment: "platform",
+    },
+  });
+
+  req.session.currentRegistrationChallenge = options.challenge;
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, true, "Registration options generated", options)
+    );
+});
+
+const verifyPasskeyRegistration = asyncHandler(async (req, res) => {
+  const { id } = req.user;
+  const { name, ...credentialJSON } = req.body;
+  console.log(req.body);
+  const expectedChallenge = req.session.currentRegistrationChallenge;
+  delete req.session.currentRegistrationChallenge;
+
+  if (!expectedChallenge) {
+    throw new ApiError(400, "No registration in progress. Please try again.");
+  }
+
+  const [verifyError, verification] = await attempt(
+    verifyRegistrationResponse({
+      response: credentialJSON,
+      expectedChallenge,
+      expectedOrigin: WEBAUTHN.origin,
+      expectedRPID: WEBAUTHN.rpID,
+    })
+  );
+  if (verifyError)
+    throw new ApiError(400, "Passkey verification failed.", verifyError);
+
+  const { verified, registrationInfo } = verification;
+  if (!verified || !registrationInfo) {
+    throw new ApiError(400, "Passkey could not be verified.");
+  }
+
+  const { credential, credentialDeviceType, credentialBackedUp, aaguid } =
+    registrationInfo;
+
+  const [saveError, passkey] = await attempt(
+    Passkey.create({
+      userId: id,
+      credentialId: credential.id,
+      publicKey: Buffer.from(credential.publicKey),
+      counter: credential.counter,
+      transports: credential.transports ?? [],
+      deviceType: credentialDeviceType,
+      backedUp: credentialBackedUp,
+      aaguid,
+      name: name || "Unknown Device",
+    })
+  );
+  if (saveError) throw new ApiError(500, "Failed to save passkey.", saveError);
+
+  return res.status(201).json(
+    new ApiResponse(201, true, "Passkey registered successfully!", {
+      id: passkey._id,
+      deviceType: passkey.deviceType,
+      createdAt: passkey.createdAt,
+    })
+  );
+});
+
+const generatePasskeyAuthOptions = asyncHandler(async (req, res) => {
+  // Empty allowCredentials = let the browser show any resident passkey for
+  // this RP ID. No username lookup needed before this step.
+  const options = await generateAuthenticationOptions({
+    rpID: WEBAUTHN.rpID,
+    allowCredentials: [],
+  });
+
+  req.session.currentAuthChallenge = options.challenge;
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, true, "Authentication options generated", options)
+    );
+});
+
+const verifyPasskeyAuthentication = asyncHandler(async (req, res, next) => {
+  const credentialJSON = req.body;
+
+  const expectedChallenge = req.session.currentAuthChallenge;
+  delete req.session.currentAuthChallenge;
+
+  if (!expectedChallenge) {
+    throw new ApiError(400, "No authentication in progress. Please try again.");
+  }
+
+  const passkeyQuery = Passkey.findOne({ credentialId: credentialJSON.id });
+  const [passkeyError, passkey] = await attempt(passkeyQuery);
+  if (passkeyError)
+    throw new ApiError(500, "Failed to fetch passkey", passkeyError);
+  if (!passkey) throw new ApiError(400, "Passkey not recognized.");
+
+  const userQuery = User.findById(passkey.userId);
+  const [userError, user] = await attempt(userQuery);
+  if (userError) throw new ApiError(500, "Failed to fetch user", userError);
+  if (!user || user.deletedAt) throw new ApiError(404, "User not found.");
+  if (user.status === "suspended")
+    throw new ApiError(403, "This account has been suspended.");
+
+  const [verifyError, verification] = await attempt(
+    verifyAuthenticationResponse({
+      response: credentialJSON,
+      expectedChallenge,
+      expectedOrigin: WEBAUTHN.origin,
+      expectedRPID: WEBAUTHN.rpID,
+      credential: {
+        id: passkey.credentialId,
+        publicKey: new Uint8Array(passkey.publicKey.buffer),
+        counter: passkey.counter,
+        transports: passkey.transports,
+      },
+    })
+  );
+  if (verifyError)
+    throw new ApiError(400, "Authentication verification failed.", verifyError);
+
+  const { verified, authenticationInfo } = verification;
+  if (!verified)
+    throw new ApiError(400, "Authentication could not be verified.");
+
+  passkey.counter = authenticationInfo.newCounter;
+  passkey.lastUsedAt = new Date();
+  const [updateError] = await attempt(passkey.save());
+  if (updateError)
+    throw new ApiError(500, "Failed to update passkey.", updateError);
+
+  await attempt(
+    User.updateOne(
+      { _id: user._id },
+      { $set: { lastLoginAt: new Date(), lastLoginIp: req.ip } }
+    )
+  );
+
+  req.session.regenerate((err) => {
+    if (err) return next(new ApiError(500, "Session regeneration failed"));
+
+    req.session.userId = user._id.toString();
+    req.session.loginAt = Date.now();
+
+    req.session.save((err) => {
+      if (err) return next(new ApiError(500, "Session save failed"));
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, true, "Login successful!", user.toJSON()));
+    });
+  });
+});
+
+export {
+  register,
+  verify,
+  login,
+  getCurrentUser,
+  logout,
+  generatePasskeyRegisterOptions,
+  verifyPasskeyRegistration,
+  generatePasskeyAuthOptions,
+  verifyPasskeyAuthentication,
+};

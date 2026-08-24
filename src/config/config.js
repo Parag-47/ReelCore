@@ -31,6 +31,12 @@ const RESEND_CONFIG = {
   emailSenderName: "ReelCore",
 };
 
+const WEBAUTHN = {
+  rpName: ENV.RP_NAME,
+  rpID: ENV.RP_ID,
+  origin: ENV.RP_ORIGIN,
+};
+
 // RATE LIMITING
 const GLOBAL_RATE_LIMIT = {
   windowMs: 15 * 60 * 1000,
@@ -55,6 +61,7 @@ export {
   SESSION_OPTIONS,
   COOKIE_OPTIONS,
   RESEND_CONFIG,
+  WEBAUTHN,
   GLOBAL_RATE_LIMIT,
   AUTH_RATE_LIMIT,
   SPEED_LIMIT,

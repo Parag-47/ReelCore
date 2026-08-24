@@ -1,4 +1,3 @@
-/* eslint-disable unicorn/no-top-level-side-effects */
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
@@ -12,7 +11,6 @@ import logger from "./utils/logger.js";
 import {
   globalLimiter,
   speedLimiter,
-  authLimiter,
 } from "./middlewares/rateLimiter.middleware.js";
 import errorHandler from "./middlewares/errorHandler.middleware.js";
 import router from "./modules/routes/index.js";
@@ -257,7 +255,7 @@ app.use(session(SESSION_OPTIONS));
 // app.set("generateCsrfToken", generateToken);
 
 app.use("/api", globalLimiter, speedLimiter);
-app.use("/api/v1/users/auth", authLimiter);
+// app.use("/api/v1/auth", authLimiter);
 app.use("/api/v1", router);
 
 app.get("/health", (_req, res) => {

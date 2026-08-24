@@ -1,4 +1,3 @@
-/* eslint-disable unicorn/numeric-separators-style */
 import Joi from "joi";
 
 const envVarsSchema = Joi.object({
@@ -60,6 +59,11 @@ const envVarsSchema = Joi.object({
   // RATE LIMITING
   RATE_LIMIT_WINDOW_MS: Joi.number().integer().positive().default(900000),
   RATE_LIMIT_MAX_REQUESTS: Joi.number().integer().positive().default(100),
+
+  // PASSKEY
+  RP_NAME: Joi.string().required(),
+  RP_ID: Joi.string().required(),
+  RP_ORIGIN: Joi.string().required(),
 
   // VIDEO PROCESSING
   FFMPEG_PATH: Joi.string().default("ffmpeg"),

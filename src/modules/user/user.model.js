@@ -1,14 +1,28 @@
 import { Schema, model } from "mongoose";
 import { v7 as uuidv7 } from "uuid";
+import generateWebAuthnUserId from "../../utils/webauthn.js";
 
 const userSchema = new Schema(
   {
-    publicId: {
+    _id: {
+      type: Schema.Types.UUID,
+      default: () => uuidv7(),
+      immutable: true,
+    },
+    // publicId: {
+    //   type: String,
+    //   unique: true,
+    //   immutable: true,
+    //   index: true,
+    //   default: () => uuidv7(),
+    // },
+    webAuthnUserId: {
       type: String,
+      required: true,
       unique: true,
       immutable: true,
-      index: true,
-      default: () => uuidv7(),
+      select: false,
+      default: () => generateWebAuthnUserId(),
     },
     email: {
       type: String,
@@ -24,29 +38,10 @@ const userSchema = new Schema(
       trim: true,
       lowercase: true,
     },
+    // Only present for users who have local/password authentication.
     password: {
       type: String,
       select: false,
-      // required() kept intentionally simple — the controller already knows
-      // which provider path it's on and guards this. a function-based required
-      // using this.authProviders.includes() is unreliable during User.create()
-      // because field ordering affects whether authProviders is set on `this`
-      // at validation time.
-    },
-    authProviders: {
-      type: [String],
-      enum: ["local", "google"],
-      default: ["local"], // was: [local] — unquoted identifier, ReferenceError at import
-    },
-    oauth: {
-      google: {
-        id: {
-          type: String,
-          unique: true,
-          sparse: true, // allows multiple null values (accounts with no Google)
-          select: false,
-        },
-      },
     },
     emailVerified: {
       type: Boolean,
@@ -56,11 +51,6 @@ const userSchema = new Schema(
       type: Date,
       select: false,
     },
-    // role: {
-    //   type: String,
-    //   enum: ["user", "admin"],
-    //   default: "user",
-    // },
     status: {
       type: String,
       // dropped "deleted" — deletedAt below already handles soft-delete state.
@@ -71,7 +61,7 @@ const userSchema = new Schema(
       enum: ["active", "suspended"],
       default: "active",
     },
-    // --- Brute-force protection (OWASP: account-based, not IP-based) ---
+    // --- Brute-force protection ---
     failedLoginAttempts: {
       type: Number,
       default: 0,
@@ -93,9 +83,12 @@ const userSchema = new Schema(
       select: false,
     },
     // --- Session/token invalidation ---
-    // Used to invalidate sessions issued before a password change.
-    // Not for forced rotation — OWASP discourages that pattern.
     passwordChangedAt: {
+      type: Date,
+      select: false,
+    },
+    // Just in case the session needs to be invalidated, not in use rn.
+    sessionsInvalidatedAt: {
       type: Date,
       select: false,
     },
@@ -108,8 +101,6 @@ const userSchema = new Schema(
       select: false,
     },
     // --- Soft delete ---
-    // null = active; Date = deleted at that timestamp.
-    // purge job candidate: deletedAt < (now - 30d) → hard delete.
     deletedAt: {
       type: Date,
       default: null,
@@ -123,14 +114,13 @@ const userSchema = new Schema(
 
 userSchema.set("toJSON", {
   versionKey: false,
+
   transform(doc, ret) {
-    // Expose publicId as the API identifier.
-    ret.id = ret.publicId;
+    // Expose MongoDB _id as the public API identifier.
+    ret.id = ret._id;
 
     // Remove internal fields.
     delete ret._id;
-    delete ret.publicId;
-    delete ret.oauth;
 
     // These are already select:false for queries, but create()/save()
     // return the full document, so remove them here as a second safety net.
@@ -150,7 +140,6 @@ userSchema.set("toJSON", {
 userSchema.set("toObject", userSchema.get("toJSON"));
 
 userSchema.index({ status: 1 });
-// userSchema.index({ role: 1 });
 
 const User = model("User", userSchema);
 

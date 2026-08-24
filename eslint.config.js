@@ -1,3 +1,4 @@
+/* eslint-disable n/no-unpublished-import */
 import js from "@eslint/js";
 import globals from "globals";
 
@@ -6,7 +7,7 @@ import pluginN from "eslint-plugin-n";
 import pluginPromise from "eslint-plugin-promise";
 import pluginSecurity from "eslint-plugin-security";
 import sonarjs from "eslint-plugin-sonarjs";
-import unicorn from "eslint-plugin-unicorn";
+// import unicorn from "eslint-plugin-unicorn";
 
 import prettier from "eslint-config-prettier";
 
@@ -25,7 +26,7 @@ export default [
   pluginPromise.configs["flat/recommended"],
   pluginSecurity.configs.recommended,
   sonarjs.configs.recommended,
-  unicorn.configs["flat/recommended"],
+  // unicorn.configs["flat/recommended"],
 
   {
     files: ["**/*.js"],
@@ -41,9 +42,7 @@ export default [
 
     rules: {
       // Project-specific overrides
-
       "no-console": "off",
-
       "no-unused-vars": [
         "warn",
         {
@@ -56,17 +55,19 @@ export default [
 
       "no-throw-literal": "error",
 
-      // Unicorn tweaks
+      // SonarJS
+      "sonarjs/no-unused-vars": "off",
+      "sonarjs/todo-tag": "warn",
 
-      "unicorn/prevent-abbreviations": "off",
-      "unicorn/filename-case": "off",
-      "unicorn/no-null": "off",
-      "unicorn/prefer-top-level-await": "off",
-      "unicorn/name-replacements": "off",
-      "unicorn/default-export-style": ["error", { functions: "ignore" }],
+      // Unicorn tweaks
+      // "unicorn/prevent-abbreviations": "off",
+      // "unicorn/filename-case": "off",
+      // "unicorn/no-null": "off",
+      // "unicorn/prefer-top-level-await": "off",
+      // "unicorn/name-replacements": "off",
+      // "unicorn/default-export-style": ["error", { functions: "ignore" }],
 
       // Security
-
       "security/detect-object-injection": "off",
     },
   },

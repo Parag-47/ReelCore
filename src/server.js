@@ -1,3 +1,4 @@
+/* eslint-disable n/no-process-exit */
 import http from "node:http";
 import mongoose from "mongoose";
 import app from "./app.js";
@@ -79,11 +80,11 @@ async function shutdown(signal) {
 
       clearTimeout(forceExit);
       logger.info("Graceful shutdown complete — exiting");
-      process.exit(0);
+      process.exitCode = 0;
     } catch (err) {
       clearTimeout(forceExit);
       logger.error("Error during graceful shutdown", { err });
-      process.exit(1);
+      process.exitCode = 1;
     }
   })();
 
