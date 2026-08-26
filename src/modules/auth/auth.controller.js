@@ -95,7 +95,6 @@ const register = asyncHandler(async (req, res) => {
   );
 
   if (error) {
-    console.log(`data: ${email} ${username}`, error);
     await Promise.allSettled([
       redisClient.del(redisTokenKey),
       redisClient.del(redisEmailKey),
@@ -252,7 +251,6 @@ const login = asyncHandler(async (req, res, next) => {
   );
 
   req.session.regenerate((err) => {
-    console.log("Error: ", err);
     if (err) return next(new ApiError(500, "Failed to login!", err));
 
     req.session.userId = user._id;
@@ -371,7 +369,7 @@ const generatePasskeyRegisterOptions = asyncHandler(async (req, res) => {
     })),
     authenticatorSelection: {
       residentKey: "preferred",
-      userVerification: "preferred",
+      userVerification: "required",
       authenticatorAttachment: "platform",
     },
   });
@@ -388,7 +386,6 @@ const generatePasskeyRegisterOptions = asyncHandler(async (req, res) => {
 const verifyPasskeyRegistration = asyncHandler(async (req, res) => {
   const { id } = req.user;
   const { name, ...credentialJSON } = req.body;
-  console.log(req.body);
   const expectedChallenge = req.session.currentRegistrationChallenge;
   delete req.session.currentRegistrationChallenge;
 
@@ -404,6 +401,7 @@ const verifyPasskeyRegistration = asyncHandler(async (req, res) => {
       expectedRPID: WEBAUTHN.rpID,
     })
   );
+
   if (verifyError)
     throw new ApiError(400, "Passkey verification failed.", verifyError);
 
@@ -445,6 +443,7 @@ const generatePasskeyAuthOptions = asyncHandler(async (req, res) => {
   const options = await generateAuthenticationOptions({
     rpID: WEBAUTHN.rpID,
     allowCredentials: [],
+    userVerification: "required",
   });
 
   req.session.currentAuthChallenge = options.challenge;
@@ -458,7 +457,6 @@ const generatePasskeyAuthOptions = asyncHandler(async (req, res) => {
 
 const verifyPasskeyAuthentication = asyncHandler(async (req, res, next) => {
   const credentialJSON = req.body;
-
   const expectedChallenge = req.session.currentAuthChallenge;
   delete req.session.currentAuthChallenge;
 
@@ -479,6 +477,14 @@ const verifyPasskeyAuthentication = asyncHandler(async (req, res, next) => {
   if (user.status === "suspended")
     throw new ApiError(403, "This account has been suspended.");
 
+  const credentialPublicKey = Buffer.isBuffer(passkey.publicKey)
+    ? passkey.publicKey
+    : Buffer.from(passkey.publicKey.buffer || passkey.publicKey);
+
+  const credentialID = Buffer.isBuffer(passkey.credentialId)
+    ? passkey.credentialId
+    : Buffer.from(passkey.credentialId, "base64url");
+
   const [verifyError, verification] = await attempt(
     verifyAuthenticationResponse({
       response: credentialJSON,
@@ -486,13 +492,14 @@ const verifyPasskeyAuthentication = asyncHandler(async (req, res, next) => {
       expectedOrigin: WEBAUTHN.origin,
       expectedRPID: WEBAUTHN.rpID,
       credential: {
-        id: passkey.credentialId,
-        publicKey: new Uint8Array(passkey.publicKey.buffer),
+        id: credentialID,
+        publicKey: credentialPublicKey,
         counter: passkey.counter,
         transports: passkey.transports,
       },
     })
   );
+
   if (verifyError)
     throw new ApiError(400, "Authentication verification failed.", verifyError);
 

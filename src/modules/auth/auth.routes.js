@@ -37,13 +37,11 @@ authRouter.post(
 authRouter.get(
   "/passkey/auth-options",
   authLimiter,
-  authCheck,
   generatePasskeyAuthOptions
 );
 authRouter.post(
   "/passkey/verify-auth",
   authLimiter,
-  authCheck,
   verifyPasskeyAuthentication
 );
 

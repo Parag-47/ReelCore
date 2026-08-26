@@ -6,7 +6,7 @@ import { DEBOUNCE_URI } from "./auth.constants.js";
 
 const api = wretch(DEBOUNCE_URI);
 
-const checkFakeEmail = async (value, helpers) => {
+const checkFakeEmail = async (value, _helpers) => {
   try {
     const data = await api.get(`?email=${encodeURIComponent(value)}`).json();
 
