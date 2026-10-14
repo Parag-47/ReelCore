@@ -24,6 +24,17 @@ const envVarsSchema = Joi.object({
 
   RESEND_KEY: Joi.string().required(),
 
+  // OAUTH
+  GOOGLE_CLIENT_ID: Joi.string().required(),
+  GOOGLE_CLIENT_SECRET: Joi.string().required(),
+  GOOGLE_REDIRECT_URI: Joi.string().required(),
+
+  GITHUB_CLIENT_ID: Joi.string().required(),
+  GITHUB_CLIENT_SECRET: Joi.string().required(),
+  GITHUB_REDIRECT_URI: Joi.string().required(),
+
+  OAUTH_POST_LOGIN_REDIRECT: Joi.string().required(),
+
   // SESSION SECRETES
   SESSION_SECRET: Joi.string().min(32).required(),
   SESSION_ENCRYPT_SECRET: Joi.string().min(32).required(),
@@ -52,9 +63,8 @@ const envVarsSchema = Joi.object({
   ALLOWED_ORIGINS: Joi.string().required(),
 
   // LOGGING
-  LOG_LEVEL: Joi.string()
-    .valid("error", "warn", "info", "debug")
-    .default("info"),
+  LOG_LEVEL: Joi.string().valid("error", "warn", "info", "debug"),
+  // .default("info"),
 
   // RATE LIMITING
   RATE_LIMIT_WINDOW_MS: Joi.number().integer().positive().default(900000),

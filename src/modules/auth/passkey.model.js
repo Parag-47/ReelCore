@@ -3,7 +3,7 @@ import { Schema, model } from "mongoose";
 const passkeySchema = new Schema(
   {
     userId: {
-      type: String, // matches User._id (uuidv7 string), not ObjectId
+      type: Schema.Types.UUID,
       ref: "User",
       required: true,
       immutable: true,

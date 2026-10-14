@@ -68,6 +68,14 @@ const devFormat = combine(
   })
 );
 
+const DEFAULT_LOG_LEVELS = {
+  development: "debug",
+  test: "warn",
+  production: "info",
+};
+
+const logLevel = ENV.LOG_LEVEL || DEFAULT_LOG_LEVELS[ENV.NODE_ENV] || "debug";
+
 const prodFormat = combine(
   timestamp(),
   errors({ stack: true }),
@@ -76,7 +84,7 @@ const prodFormat = combine(
 );
 
 const logger = createLogger({
-  level: ENV.LOG_LEVEL || (ENV.NODE_ENV === "production" ? "warn" : "debug"),
+  level: logLevel,
   format: ENV.NODE_ENV === "production" ? prodFormat : devFormat,
   transports: [new transports.Console()],
   exitOnError: false,

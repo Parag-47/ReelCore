@@ -225,6 +225,7 @@ app.use(
 // REQUEST LOGGING
 app.use(
   morgan("combined", {
+    // immediate: true, // logs the request before the controller is executed the triad-off being you wont get response related data like response time and size etc.
     stream: {
       write: (msg) => logger.http(msg.trim()),
     },

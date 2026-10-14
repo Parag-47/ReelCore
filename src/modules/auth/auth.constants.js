@@ -5,3 +5,5 @@ export const MAX_FAILED_ATTEMPTS = 5; // was missing — see bug #1 above
 export const BASE_LOCKOUT_MS = 1 * 60 * 1000; // 1 min
 export const MAX_LOCKOUT_MS = 24 * 60 * 60 * 1000; // 24 hr cap
 export const DEBOUNCE_URI = "https://disposable.debounce.io";
+export const OAUTH_SESSION_KEY = "oauthFlow";
+export const OAUTH_FLOW_TTL_MS = 10 * 60 * 1000; // 10 minutes

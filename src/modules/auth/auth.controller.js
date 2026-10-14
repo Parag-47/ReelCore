@@ -21,7 +21,16 @@ import ApiResponse from "../../utils/ApiResponse.js";
 import attempt from "../../utils/attempt.js";
 import logger from "../../utils/logger.js";
 import sendVerificationEmail from "../../services/email/email.service.js";
-import { SESSION_NAME, COOKIE_OPTIONS, WEBAUTHN } from "../../config/config.js";
+import {
+  buildAuthorizationUrl,
+  handleCallback,
+} from "./oauth/oauth.service.js";
+import {
+  SESSION_NAME,
+  COOKIE_OPTIONS,
+  WEBAUTHN,
+  OAUTH_CONFIG,
+} from "../../config/config.js";
 import {
   PENDING_EMAIL_PREFIX,
   PENDING_REGISTRATION_PREFIX,
@@ -536,6 +545,31 @@ const verifyPasskeyAuthentication = asyncHandler(async (req, res, next) => {
   });
 });
 
+const initiateOAuth = asyncHandler(async (req, res) => {
+  const url = await buildAuthorizationUrl(req, req.params.provider);
+  res.redirect(url);
+});
+
+const oauthCallback = asyncHandler(async (req, res, next) => {
+  const callbackUrl = new URL(
+    req.originalUrl,
+    `${req.protocol}://${req.get("host")}`
+  );
+
+  const user = await handleCallback(req, callbackUrl);
+
+  // Regenerate the session on privilege change (pre-auth -> authenticated)
+  // to prevent session fixation.
+  req.session.regenerate((err) => {
+    if (err) return next(err);
+    req.session.userId = user.id;
+    req.session.sessionsInvalidatedAt = Date.now();
+    req.session.save((saveErr) =>
+      saveErr ? next(saveErr) : res.redirect(OAUTH_CONFIG.postLoginRedirect)
+    );
+  });
+});
+
 export {
   register,
   verify,
@@ -546,4 +580,6 @@ export {
   verifyPasskeyRegistration,
   generatePasskeyAuthOptions,
   verifyPasskeyAuthentication,
+  initiateOAuth,
+  oauthCallback,
 };

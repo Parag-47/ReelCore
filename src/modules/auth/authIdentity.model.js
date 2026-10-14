@@ -2,8 +2,8 @@ import { Schema, model } from "mongoose";
 
 const authIdentitySchema = new Schema(
   {
-    userId: {
-      type: Schema.Types.ObjectId,
+    user: {
+      type: Schema.Types.UUID,
       ref: "User",
       required: true,
       immutable: true,
@@ -11,7 +11,7 @@ const authIdentitySchema = new Schema(
     },
     provider: {
       type: String,
-      enum: ["google"],
+      enum: ["google", "github"],
       required: true,
       immutable: true,
     },

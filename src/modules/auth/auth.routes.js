@@ -13,6 +13,8 @@ import {
   verifyPasskeyRegistration,
   generatePasskeyAuthOptions,
   verifyPasskeyAuthentication,
+  initiateOAuth,
+  oauthCallback,
 } from "./auth.controller.js";
 
 const authRouter = Router();
@@ -44,5 +46,6 @@ authRouter.post(
   authLimiter,
   verifyPasskeyAuthentication
 );
-
+authRouter.get("/:provider", authLimiter, initiateOAuth);
+authRouter.get("/:provider/callback", authLimiter, oauthCallback);
 export default authRouter;

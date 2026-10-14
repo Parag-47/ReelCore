@@ -1,11 +1,13 @@
 import ENV from "./env.config.js";
 import redisStore from "../providers/redisSessionStore.js";
 
+const NODE_ENV = ENV.NODE_ENV;
+
 const SESSION_NAME = ENV.NODE_ENV === "production" ? "__Host-sid" : "sid";
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: ENV.nodeEnv === "production",
+  secure: ENV.NODE_ENV === "production",
   // use "lax" for same-site SPA
   // use "none" only if frontend is cross-site
   sameSite: "lax",
@@ -29,6 +31,20 @@ const RESEND_CONFIG = {
   key: ENV.RESEND_KEY,
   emailFrom: "noreply@dev0.dpdns.org",
   emailSenderName: "ReelCore",
+};
+
+const OAUTH_CONFIG = {
+  google: {
+    clientId: ENV.GOOGLE_CLIENT_ID,
+    clientSecret: ENV.GOOGLE_CLIENT_SECRET,
+    redirectURI: ENV.GOOGLE_REDIRECT_URI,
+  },
+  github: {
+    clientId: ENV.GITHUB_CLIENT_ID,
+    clientSecret: ENV.GITHUB_CLIENT_SECRET,
+    redirectURI: ENV.GITHUB_REDIRECT_URI,
+  },
+  postLoginRedirect: ENV.OAUTH_POST_LOGIN_REDIRECT,
 };
 
 const WEBAUTHN = {
@@ -61,6 +77,7 @@ export {
   SESSION_OPTIONS,
   COOKIE_OPTIONS,
   RESEND_CONFIG,
+  OAUTH_CONFIG,
   WEBAUTHN,
   GLOBAL_RATE_LIMIT,
   AUTH_RATE_LIMIT,
