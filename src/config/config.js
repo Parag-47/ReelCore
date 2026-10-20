@@ -1,8 +1,6 @@
 import ENV from "./env.config.js";
 import redisStore from "../providers/redisSessionStore.js";
 
-const NODE_ENV = ENV.NODE_ENV;
-
 const SESSION_NAME = ENV.NODE_ENV === "production" ? "__Host-sid" : "sid";
 
 const COOKIE_OPTIONS = {
@@ -70,6 +68,14 @@ const SPEED_LIMIT = {
   delayMs: () => 500,
 };
 
+const S3_STORAGE = {
+  s3AccessKey: ENV.S3_ACCESS_KEY,
+  s3SecretKey: ENV.S3_SECRET_KEY,
+  s3Region: ENV.S3_REGION,
+  s3Bucket: ENV.S3_BUCKET,
+  s3Endpoint: ENV.S3_ENDPOINT,
+};
+
 export { default as ENV } from "./env.config.js";
 
 export {
@@ -82,4 +88,5 @@ export {
   GLOBAL_RATE_LIMIT,
   AUTH_RATE_LIMIT,
   SPEED_LIMIT,
+  S3_STORAGE,
 };

@@ -52,12 +52,12 @@ const envVarsSchema = Joi.object({
   // BCRYPT
   BCRYPT_SALT_ROUNDS: Joi.number().integer().min(8).max(15).default(12),
 
-  // STORAGE (S3 / MINIO)
-  S3_ACCESS_KEY: Joi.string().allow("").default(""),
-  S3_SECRET_KEY: Joi.string().allow("").default(""),
-  S3_REGION: Joi.string().default("ap-south-1"),
+  // STORAGE (S3)
+  S3_ACCESS_KEY: Joi.string().required(),
+  S3_SECRET_KEY: Joi.string().required(),
+  S3_REGION: Joi.string().required(),
   S3_BUCKET: Joi.string().required(),
-  S3_ENDPOINT: Joi.string().allow("").default(""),
+  S3_ENDPOINT: Joi.string().required(),
 
   // CORS
   ALLOWED_ORIGINS: Joi.string().required(),

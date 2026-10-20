@@ -16,11 +16,13 @@
   "main": "server.js",
   "scripts": {
     "start": "nodemon --env-file=.env src/server.js",
+    "prod": "node --env-file=.env.production src/server.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1153.0",
     "@simplewebauthn/server": "^13.3.2",
     "argon2": "^0.44.0",
     "connect-redis": "^9.0.0",
