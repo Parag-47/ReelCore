@@ -16,7 +16,7 @@
   "main": "server.js",
   "scripts": {
     "start": "nodemon --env-file=.env src/server.js",
-    "prod": "node --env-file=.env.production src/server.js",
+    "prod": "node src/server.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "echo \"Error: no test specified\" && exit 1"
